@@ -1,0 +1,52 @@
+{
+  "Category": "Mumble",
+  "CategoryIcon": "images/menu_entries/mumble_category",
+  "Author": "Mumble Developers", 
+  "Description": "Provides Integration for the Mumble VoIP software", 
+  "Name": "Mumble", 
+  "Icon": "images/menu_entries/mumble_icon", 
+  "URL": "https://www.mumble.info/", 
+  "Version": "0.1",
+  "SDKVersion": 2,
+  "OS": [
+    {
+        "Platform": "windows", 
+        "MinimumVersion" : "10"
+    }
+  ],
+  "Software": 
+    {
+        "MinimumVersion" : "4.1"
+    },
+  "CodePath": "streamdeck_integration.exe", 
+  "Actions": [
+    {
+      "Icon": "images/menu_entries/muted_icon", 
+      "Name": "Toggle Mute", 
+      "States": [
+        {
+          "Image": "images/actions/muted_icon",
+          "TitleAlignment": "middle", 
+          "FontSize": "16"
+        }
+      ], 
+      "SupportedInMultiActions": false,
+      "Tooltip": "Toggles the local user's mute status", 
+      "UUID": "info.mumble.mumble.actions.toggle_local_user_mute"
+    },
+    {
+      "Icon": "images/menu_entries/deafened_icon", 
+      "Name": "Toggle Deaf", 
+      "States": [
+        {
+          "Image": "images/actions/deafened_icon",
+          "TitleAlignment": "middle", 
+          "FontSize": "16"
+        }
+      ], 
+      "SupportedInMultiActions": false,
+      "Tooltip": "Toggles the local user's mute status", 
+      "UUID": "info.mumble.mumble.actions.toggle_local_user_deaf"
+    }
+  ]
+}

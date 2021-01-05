@@ -30,14 +30,23 @@ namespace StreamDeckIntegration {
 
 	class ConnectionManager {
 	public:
-		ConnectionManager(int inPort, const std::string &inPluginUUID, const std::string &inRegisterEvent,
-						  const std::string &inInfo, StreamDeckPlugin *inPlugin);
+		ConnectionManager(int port, const std::string &pluginUUID, const std::string &registerEvent,
+						  const std::string &info, StreamDeckPlugin &plugin);
 
 		/// Start the event loop
 		void run();
 
+		/**
+		 * Reports about an error that occured. This involves writing the error message
+		 * to the log file and optionally triggering an alert for the provided context.
+		 *
+		 * @param errorMessage The error message that should be logged
+		 * @param context If given this is the context that an alert will be shown for
+		 */
+		void reportError(const std::string &errorMessage, const std::string &context = "");
+
 		// API to communicate with the Stream Deck application
-		void api_setTitle(const std::string &title, const std::string &context, ESDSDKTarget inTarget);
+		void api_setTitle(const std::string &title, const std::string &context, ESDSDKTarget target);
 		void api_setImage(const std::string &base64ImageString, const std::string &context, ESDSDKTarget target);
 		void api_showAlertForContext(const std::string &context);
 		void api_showOKForContext(const std::string &context);
@@ -61,7 +70,7 @@ namespace StreamDeckIntegration {
 		std::string m_registerEvent;
 		websocketpp::connection_hdl m_connectionHandle;
 		WebsocketClient m_websocket;
-		StreamDeckPlugin *m_plugin = nullptr;
+		StreamDeckPlugin &m_plugin;
 	};
 
 }; // namespace StreamDeckIntegration

@@ -6,31 +6,101 @@
 #include "MumblePlugin.h"
 #include "ConnectionManager.h"
 
-#include <boost/filesystem.hpp>
 #include <boost/process.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include <string>
 
 namespace Mumble {
 namespace StreamDeckIntegration {
 
-	void MumblePlugin::keyDownForAction(const std::string &inAction, const std::string &inContext,
-										const nlohmann::json &inPayload, const std::string &inDeviceID) {
-		// Search for the CLI executable in PATH
-		boost::filesystem::path cliPath = boost::process::search_path("mumble_json_bridge_cli");
-		if (cliPath.empty()) {
-			// Not found
-			m_connectionManager->api_setTitle("Error", inContext, kESDSDKTarget_HardwareAndSoftware);
-			m_connectionManager->api_showAlertForContext(inContext);
-			return;
+	void MumblePlugin::keyDownForAction(const std::string &actionID, const std::string &context,
+										const nlohmann::json &payload, const std::string &deviceID) {
+		try {
+			boost::filesystem::path cliPath = findCLI();
+			const nlohmann::json action     = getJSONForAction(actionID);
+			nlohmann::json response         = executeAction(action, cliPath);
+
+			// Clear any potential text on the button
+			m_connectionManager->api_setTitle("", context, kESDSDKTarget_HardwareAndSoftware);
+			try {
+				std::string responseType = response["response_type"].get< std::string >();
+				if (responseType != "error") {
+					m_connectionManager->api_logMessage("Successfully executed action " + actionID);
+				} else {
+					m_connectionManager->reportError("Error while executing action " + actionID + " "
+													 + response["response"]["error_message"].get< std::string >());
+				}
+			} catch (const nlohmann::json::exception &e) {
+				throw PluginException(std::string("JSON error: ") + e.what());
+			}
+		} catch (const PluginException &e) {
+			m_connectionManager->reportError(e.what(), context);
+		}
+	}
+
+	void MumblePlugin::keyUpForAction(const std::string &actionID, const std::string &context,
+									  const nlohmann::json &payload, const std::string &deviceID) {}
+
+	void MumblePlugin::willAppearForAction(const std::string &actionID, const std::string &context,
+										   const nlohmann::json &payload, const std::string &deviceID) {}
+
+	void MumblePlugin::willDisappearForAction(const std::string &actionID, const std::string &context,
+											  const nlohmann::json &payload, const std::string &deviceID) {}
+
+	void MumblePlugin::deviceDidConnect(const std::string &deviceID, const nlohmann::json &deviceInfo) {}
+
+	void MumblePlugin::deviceDidDisconnect(const std::string &deviceID) {}
+
+	void MumblePlugin::sendToPlugin(const std::string &actionID, const std::string &context,
+									const nlohmann::json &payload, const std::string &deviceID) {}
+
+	nlohmann::json MumblePlugin::getJSONForAction(const std::string &actionID) const {
+		nlohmann::json action;
+		if (actionID == "info.mumble.mumble.actions.toggle_local_user_mute") {
+			// clang-format off
+			action = {
+				{ "message_type", "operation" },
+				{
+					"message", {
+						{ "operation", "toggle_local_user_mute" }
+					}
+				}
+			};
+			// clang-format on
+		} else if (actionID == "info.mumble.mumble.actions.toggle_local_user_deaf") {
+			// clang-format off
+			action = {
+				{ "message_type", "operation" },
+				{
+					"message", {
+						{ "operation", "toggle_local_user_deaf" }
+					}
+				}
+			};
+			// clang-format on
+		} else {
+			throw PluginException("Unknown action \"" + actionID + "\"");
 		}
 
+		return action;
+	}
 
+	boost::filesystem::path MumblePlugin::findCLI() {
+		const std::string cli_name      = "mumble_json_bridge_cli";
+		boost::filesystem::path cliPath = boost::process::search_path(cli_name);
+		if (cliPath.empty()) {
+			// Not found
+			throw PluginException("Unable to locate \"" + cli_name + "\" binary. Are you sure it's in path");
+		}
 
+		return cliPath;
+	}
+
+	nlohmann::json MumblePlugin::executeAction(const nlohmann::json &action, const boost::filesystem::path &cliPath) {
 		boost::process::ipstream stdout_stream;
 		boost::process::ipstream stderr_stream;
 		std::error_code launchErrorCode;
-		const nlohmann::json action = getJSONForAction(inAction);
 		boost::process::child c(cliPath, "--json", action.dump(), boost::process::std_out > stdout_stream,
 								boost::process::std_err > stderr_stream, launchErrorCode);
 
@@ -46,82 +116,32 @@ namespace StreamDeckIntegration {
 
 		c.wait();
 
+		// Trim contents
+		boost::trim(stdout_content);
+		boost::trim(stderr_content);
+
 		int processExitCode = c.exit_code();
 
 		if (launchErrorCode) {
-			m_connectionManager->api_setTitle(std::string("LEC: ") + std::to_string(launchErrorCode.value()), inContext,
-											  kESDSDKTarget_HardwareAndSoftware);
-			m_connectionManager->api_showAlertForContext(inContext);
-		} else {
-			if (processExitCode == 0) {
-				m_connectionManager->api_setTitle("", inContext, kESDSDKTarget_HardwareAndSoftware);
-				try {
-					nlohmann::json response = nlohmann::json::parse(stdout_content);
-
-					std::string responseType = response["response_type"].get< std::string >();
-					if (responseType != "error") {
-						m_connectionManager->api_logMessage("Successfully executed action " + inAction);
-					} else {
-						m_connectionManager->api_logMessage(
-							"Error while executing action " + inAction + " "
-							+ response["response"]["error_message"].get< std::string >());
-					}
-				} catch (const nlohmann::json::exception &e) {
-					m_connectionManager->api_logMessage(std::string("Malformed CLI response: ") + e.what());
-				}
-			} else {
-				m_connectionManager->api_setTitle(std::string("PEC: ") + std::to_string(processExitCode), inContext,
-												  kESDSDKTarget_HardwareAndSoftware);
-				m_connectionManager->api_showAlertForContext(inContext);
-			}
+			throw PluginException("Trying to launch external process resulted in non-zero exit code: "
+								  + std::to_string(launchErrorCode.value()));
 		}
-	}
-
-	void MumblePlugin::keyUpForAction(const std::string &inAction, const std::string &inContext,
-									  const nlohmann::json &inPayload, const std::string &inDeviceID) {}
-
-	void MumblePlugin::willAppearForAction(const std::string &inAction, const std::string &inContext,
-										   const nlohmann::json &inPayload, const std::string &inDeviceID) {}
-
-	void MumblePlugin::willDisappearForAction(const std::string &inAction, const std::string &inContext,
-											  const nlohmann::json &inPayload, const std::string &inDeviceID) {}
-
-	void MumblePlugin::deviceDidConnect(const std::string &inDeviceID, const nlohmann::json &inDeviceInfo) {}
-
-	void MumblePlugin::deviceDidDisconnect(const std::string &inDeviceID) {}
-
-	void MumblePlugin::sendToPlugin(const std::string &inAction, const std::string &inContext,
-									const nlohmann::json &inPayload, const std::string &inDeviceID) {}
-
-	nlohmann::json MumblePlugin::getJSONForAction(const std::string &actionID) const {
-		nlohmann::json action;
-		if (actionID == "info.mumble.mumble.actions.toggle_local_user_mute") {
-			// clang-format off
-		action = {
-			{ "message_type", "operation" },
-			{
-				"message", {
-					{ "operation", "toggle_local_user_mute" }
-				}
+		if (processExitCode) {
+			std::string errorMsg = "Calling the CLI returned non-zero exit code: " + std::to_string(processExitCode);
+			if (stderr_content.size() > 0) {
+				errorMsg += " (\"" + stderr_content + "\")";
 			}
-		};
-			// clang-format on
-		} else if (actionID == "info.mumble.mumble.actions.toggle_local_user_deaf") {
-			// clang-format off
-		action = {
-			{ "message_type", "operation" },
-			{
-				"message", {
-					{ "operation", "toggle_local_user_deaf" }
-				}
-			}
-		};
-			// clang-format on
-		} else {
-			throw std::invalid_argument(std::string("Unknown action ") + actionID);
+
+			throw PluginException(errorMsg);
 		}
 
-		return action;
+		try {
+			// Parse and return
+			return nlohmann::json::parse(stdout_content);
+		} catch (const nlohmann::json::parse_error &e) {
+			throw PluginException(std::string("CLI returned malformed JSON: ") + e.what() + " (JSON: \""
+								  + stdout_content + "\")");
+		}
 	}
 
 }; // namespace StreamDeckIntegration

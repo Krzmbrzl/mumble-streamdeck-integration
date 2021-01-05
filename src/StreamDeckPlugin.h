@@ -23,7 +23,7 @@ namespace StreamDeckIntegration {
 		StreamDeckPlugin() {}
 		virtual ~StreamDeckPlugin() {}
 
-		void SetConnectionManager(ConnectionManager *inConnectionManager) { m_connectionManager = inConnectionManager; }
+		void setConnectionManager(ConnectionManager *inConnectionManager) { m_connectionManager = inConnectionManager; }
 
 		virtual void keyDownForAction(const std::string &inAction, const std::string &inContext,
 									  const nlohmann::json &inPayload, const std::string &inDeviceID) = 0;

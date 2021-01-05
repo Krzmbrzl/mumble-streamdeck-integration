@@ -13,6 +13,9 @@
 #include "MumblePlugin.h"
 
 #include <iostream>
+#include <memory>
+
+using namespace Mumble::StreamDeckIntegration;
 
 int main(int argc, const char **argv) {
 	if (argc != 9) {
@@ -61,11 +64,10 @@ int main(int argc, const char **argv) {
 	}
 
 	// Create the plugin
-	Mumble::StreamDeckIntegration::MumblePlugin *plugin = new Mumble::StreamDeckIntegration::MumblePlugin();
+	std::unique_ptr<MumblePlugin> plugin = std::make_unique<MumblePlugin>();
 
 	// Create the connection manager
-	Mumble::StreamDeckIntegration::ConnectionManager *connectionManager =
-		new Mumble::StreamDeckIntegration::ConnectionManager(port, pluginUUID, registerEvent, info, plugin);
+	std::unique_ptr<ConnectionManager> connectionManager = std::make_unique<ConnectionManager>(port, pluginUUID, registerEvent, info, *plugin);
 
 	// Connect and start the event loop
 	connectionManager->run();

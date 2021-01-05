@@ -22,6 +22,12 @@ namespace StreamDeckIntegration {
 
 		websocketpp::lib::error_code ec;
 		m_websocket.send(m_connectionHandle, jsonObject.dump(), websocketpp::frame::opcode::text, ec);
+		
+		// Apparently the first message that gets written to the log gets lost somewhere on Elgato's end
+		// (only causes the log file to be created).
+		// Thus we make sure to log an unnecessary thing right here at the beginning. We don't want it
+		// to be jibberish though in case it does end up in the log after all.
+		api_logMessage("Mumble StreamDeckIntegration is running");
 	}
 
 	void ConnectionManager::onFail(WebsocketClient *client, websocketpp::connection_hdl connectionHandler) {
@@ -53,27 +59,27 @@ namespace StreamDeckIntegration {
 			try {
 				nlohmann::json receivedJson = nlohmann::json::parse(message);
 
-				std::string event    = Utils::getStringByName(receivedJson, kESDSDKCommonEvent);
-				std::string context  = Utils::getStringByName(receivedJson, kESDSDKCommonContext);
-				std::string action   = Utils::getStringByName(receivedJson, kESDSDKCommonAction);
-				std::string deviceID = Utils::getStringByName(receivedJson, kESDSDKCommonDevice);
+				std::string event      = Utils::getStringByName(receivedJson, kESDSDKCommonEvent);
+				std::string context    = Utils::getStringByName(receivedJson, kESDSDKCommonContext);
+				std::string action     = Utils::getStringByName(receivedJson, kESDSDKCommonAction);
+				std::string deviceID   = Utils::getStringByName(receivedJson, kESDSDKCommonDevice);
 				nlohmann::json payload = Utils::getObjectByName(receivedJson, kESDSDKCommonPayload);
 
 				if (event == kESDSDKEventKeyDown) {
-					m_plugin->keyDownForAction(action, context, payload, deviceID);
+					m_plugin.keyDownForAction(action, context, payload, deviceID);
 				} else if (event == kESDSDKEventKeyUp) {
-					m_plugin->keyUpForAction(action, context, payload, deviceID);
+					m_plugin.keyUpForAction(action, context, payload, deviceID);
 				} else if (event == kESDSDKEventWillAppear) {
-					m_plugin->willAppearForAction(action, context, payload, deviceID);
+					m_plugin.willAppearForAction(action, context, payload, deviceID);
 				} else if (event == kESDSDKEventWillDisappear) {
-					m_plugin->willDisappearForAction(action, context, payload, deviceID);
+					m_plugin.willDisappearForAction(action, context, payload, deviceID);
 				} else if (event == kESDSDKEventDeviceDidConnect) {
 					nlohmann::json deviceInfo = Utils::getObjectByName(receivedJson, kESDSDKCommonDeviceInfo);
-					m_plugin->deviceDidConnect(deviceID, deviceInfo);
+					m_plugin.deviceDidConnect(deviceID, deviceInfo);
 				} else if (event == kESDSDKEventDeviceDidDisconnect) {
-					m_plugin->deviceDidDisconnect(deviceID);
+					m_plugin.deviceDidDisconnect(deviceID);
 				} else if (event == kESDSDKEventSendToPlugin) {
-					m_plugin->sendToPlugin(action, context, payload, deviceID);
+					m_plugin.sendToPlugin(action, context, payload, deviceID);
 				}
 			} catch (...) {
 			}
@@ -81,12 +87,10 @@ namespace StreamDeckIntegration {
 	}
 
 	ConnectionManager::ConnectionManager(int port, const std::string &pluguUID, const std::string &registerEvent,
-										 const std::string &info, StreamDeckPlugin *plugin)
-		:
+										 const std::string &info, StreamDeckPlugin &plugin)
+		: m_port(port), m_pluginUUID(pluguUID), m_registerEvent(registerEvent), m_plugin(plugin) {
 
-		  m_port(port), m_pluginUUID(pluguUID), m_registerEvent(registerEvent), m_plugin(plugin) {
-		if (plugin != nullptr)
-			plugin->SetConnectionManager(this);
+		plugin.setConnectionManager(this);
 	}
 
 	void ConnectionManager::run() {
@@ -127,6 +131,16 @@ namespace StreamDeckIntegration {
 			// will exit when this connection is closed.
 			m_websocket.run();
 		} catch (websocketpp::exception const &) {
+		}
+	}
+
+	void ConnectionManager::reportError(const std::string &errorMessage, const std::string &context) {
+		// Log the error message
+		api_logMessage("Mumble plugin error: " + errorMessage);
+
+		if (context.size() > 0) {
+			// Also show an alert for the given context
+			api_showAlertForContext(context);
 		}
 	}
 

@@ -1,36 +1,50 @@
-// Copyright 2020 The Mumble Developers. All rights reserved.
+// Copyright 2021 The Mumble Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style license
 // that can be found in the LICENSE file at the root of the
 // source tree.
 
+// The original version of this code was taken from https://github.com/elgatosf/streamdeck-cpu
+// which was published under the MIT license.
+
 #ifndef MUMBLE_STREAMDECK_INTEGRATION_STREAMDECKPLUGIN_H_
 #define MUMBLE_STREAMDECK_INTEGRATION_STREAMDECKPLUGIN_H_
 
-#include "ESDBasePlugin.h"
+#include <string>
 
-class StreamDeckPlugin : public ESDBasePlugin {
-public:
-	StreamDeckPlugin() { }
-	virtual ~StreamDeckPlugin() { }
-	
-	virtual void KeyDownForAction(const std::string& inAction, const std::string& inContext,
-			const nlohmann::json &inPayload, const std::string& inDeviceID) override;
-	virtual void KeyUpForAction(const std::string& inAction, const std::string& inContext,
-			const nlohmann::json &inPayload, const std::string& inDeviceID) override;
-	
-	virtual void WillAppearForAction(const std::string& inAction, const std::string& inContext,
-			const nlohmann::json &inPayload, const std::string& inDeviceID) override;
-	virtual void WillDisappearForAction(const std::string& inAction, const std::string& inContext,
-			const nlohmann::json &inPayload, const std::string& inDeviceID) override;
-	
-	virtual void DeviceDidConnect(const std::string& inDeviceID, const nlohmann::json &inDeviceInfo) override;
-	virtual void DeviceDidDisconnect(const std::string& inDeviceID) override;
+#include <nlohmann/json.hpp>
 
-	virtual void SendToPlugin(const std::string& inAction, const std::string& inContext,
-			const nlohmann::json &inPayload, const std::string& inDeviceID) override;
+namespace Mumble {
+namespace StreamDeckIntegration {
 
-private:
-	nlohmann::json getJSONForAction(const std::string &actionID) const;
-};
+	class ConnectionManager;
 
+	class StreamDeckPlugin {
+	public:
+		StreamDeckPlugin() {}
+		virtual ~StreamDeckPlugin() {}
+
+		void SetConnectionManager(ConnectionManager *inConnectionManager) { m_connectionManager = inConnectionManager; }
+
+		virtual void keyDownForAction(const std::string &inAction, const std::string &inContext,
+									  const nlohmann::json &inPayload, const std::string &inDeviceID) = 0;
+		virtual void keyUpForAction(const std::string &inAction, const std::string &inContext,
+									const nlohmann::json &inPayload, const std::string &inDeviceID)   = 0;
+
+		virtual void willAppearForAction(const std::string &inAction, const std::string &inContext,
+										 const nlohmann::json &inPayload, const std::string &inDeviceID)    = 0;
+		virtual void willDisappearForAction(const std::string &inAction, const std::string &inContext,
+											const nlohmann::json &inPayload, const std::string &inDeviceID) = 0;
+
+		virtual void deviceDidConnect(const std::string &inDeviceID, const nlohmann::json &inDeviceInfo) = 0;
+		virtual void deviceDidDisconnect(const std::string &inDeviceID)                                  = 0;
+
+		virtual void sendToPlugin(const std::string &inAction, const std::string &inContext,
+								  const nlohmann::json &inPayload, const std::string &inDeviceID) = 0;
+
+	protected:
+		ConnectionManager *m_connectionManager = nullptr;
+	};
+
+};     // namespace StreamDeckIntegration
+};     // namespace Mumble
 #endif // MUMBLE_STREAMDECK_INTEGRATION_STREAMDECKPLUGIN_H_
